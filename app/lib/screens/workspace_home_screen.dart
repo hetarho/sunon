@@ -16,6 +16,66 @@ class WorkspaceHomeScreen extends StatelessWidget {
     );
   }
 
+  Future<void> _addProject(BuildContext context) async {
+    final controller = TextEditingController();
+    String? errorText;
+
+    final name = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              title: const Text('프로젝트 추가'),
+              content: TextField(
+                controller: controller,
+                autofocus: true,
+                decoration: InputDecoration(
+                  labelText: '프로젝트명',
+                  errorText: errorText,
+                ),
+                onSubmitted: (_) {
+                  final text = controller.text.trim();
+                  if (text.isNotEmpty) {
+                    Navigator.of(context).pop(text);
+                  }
+                },
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('취소'),
+                ),
+                TextButton(
+                  onPressed: () {
+                    final text = controller.text.trim();
+                    if (text.isNotEmpty) {
+                      Navigator.of(context).pop(text);
+                    } else {
+                      setState(() {
+                        errorText = '프로젝트명을 입력해 주세요';
+                      });
+                    }
+                  },
+                  child: const Text('확인'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    if (name == null || !context.mounted) return;
+
+    final error = await context.read<WorkspaceProvider>().addProject(name);
+    if (error != null && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(error)),
+      );
+    }
+  }
+
   Future<void> _openWorkspace(BuildContext context) async {
     final home = Platform.environment['HOME'] ?? '/';
     final path = await FilePicker.platform.getDirectoryPath(
@@ -38,6 +98,11 @@ class WorkspaceHomeScreen extends StatelessWidget {
           appBar: AppBar(
             title: Text(workspace.name),
             actions: [
+              IconButton(
+                icon: const Icon(Icons.add),
+                tooltip: '프로젝트 추가',
+                onPressed: () => _addProject(context),
+              ),
               IconButton(
                 icon: const Icon(Icons.folder_open),
                 tooltip: 'Open Workspace',
@@ -102,7 +167,7 @@ class WorkspaceHomeScreen extends StatelessWidget {
                             : null,
                       ),
                       selected: project.isActive,
-                      onTap: () => provider.setActiveProject(index),
+                      onTap: () => provider.navigateToProject(index),
                     );
                   },
                 ),
