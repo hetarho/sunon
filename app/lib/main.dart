@@ -7,6 +7,7 @@ import 'package:window_manager/window_manager.dart';
 import 'providers/workspace_provider.dart';
 import 'screens/workspace_selection_screen.dart';
 import 'screens/workspace_home_screen.dart';
+import 'screens/project_detail_screen.dart';
 
 Future<void> main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -26,10 +27,7 @@ Future<void> main(List<String> args) async {
 
   if (isNewWindow) {
     // Sub-window: configure window options and show
-    const windowOptions = WindowOptions(
-      size: Size(800, 600),
-      center: true,
-    );
+    const windowOptions = WindowOptions(size: Size(800, 600), center: true);
     windowManager.waitUntilReadyToShow(windowOptions, () async {
       await windowManager.show();
       await windowManager.focus();
@@ -58,10 +56,9 @@ class MyApp extends StatelessWidget {
       },
       child: MaterialApp(
         title: 'Sunon',
-        theme: ThemeData(
-          colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
-        ),
+        theme: ThemeData(colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple)),
         home: const AppShell(),
+        debugShowCheckedModeBanner: false,
       ),
     );
   }
@@ -97,11 +94,12 @@ class _AppShellState extends State<AppShell> with WindowListener {
     return Consumer<WorkspaceProvider>(
       builder: (context, provider, _) {
         if (provider.isLoading) {
-          return const Scaffold(
-            body: Center(child: CircularProgressIndicator()),
-          );
+          return const Scaffold(body: Center(child: CircularProgressIndicator()));
         }
         if (provider.hasWorkspace) {
+          if (provider.isInProjectView) {
+            return const ProjectDetailScreen();
+          }
           return const WorkspaceHomeScreen();
         }
         return const WorkspaceSelectionScreen();
