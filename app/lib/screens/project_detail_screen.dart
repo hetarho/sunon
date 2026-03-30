@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/workspace_provider.dart';
+import 'product_page.dart';
 
 class ProjectDetailScreen extends StatefulWidget {
   const ProjectDetailScreen({super.key});
@@ -64,14 +65,18 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
           ),
           const VerticalDivider(thickness: 1, width: 1),
           Expanded(
-            child: Center(
-              child: Text(
-                _menuLabels[_selectedIndex],
-                style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+            child: _selectedIndex == 0 && activeProject != null
+                ? ProductPage(
+                    projectPath: activeProject.path,
+                  )
+                : Center(
+                    child: Text(
+                      _menuLabels[_selectedIndex],
+                      style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                            color: Theme.of(context).colorScheme.onSurfaceVariant,
+                          ),
                     ),
-              ),
-            ),
+                  ),
           ),
         ],
       ),

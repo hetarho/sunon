@@ -52,9 +52,10 @@ class WorkspaceProvider extends ChangeNotifier {
   }
 
   /// Navigate back from project detail view to project list.
-  void navigateBack() {
+  /// Rescans projects to pick up any renames that happened in detail view.
+  Future<void> navigateBack() async {
     _isInProjectView = false;
-    notifyListeners();
+    await refreshProjects();
   }
 
   /// Set a project as the active project.
@@ -95,6 +96,19 @@ class WorkspaceProvider extends ChangeNotifier {
     _workspace!.projects = projects;
     notifyListeners();
     return null;
+  }
+
+  /// Update a project's path and name after folder rename.
+  /// Silent — no notifyListeners() to avoid rebuilding ProductPage mid-edit.
+  void updateProjectPath(String oldPath, String newPath, String newName) {
+    if (_workspace == null) return;
+    for (final p in _workspace!.projects) {
+      if (p.path == oldPath) {
+        p.path = newPath;
+        p.name = newName;
+        break;
+      }
+    }
   }
 
   /// Refresh the project list (re-scan workspace directory).

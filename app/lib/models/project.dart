@@ -1,6 +1,6 @@
 class Project {
-  final String path;
-  final String name;
+  String path;
+  String name;
   bool isActive;
 
   Project({

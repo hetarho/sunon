@@ -88,6 +88,23 @@ class WorkspaceService {
     return projectPath;
   }
 
+  /// Renames a project folder. Returns the new absolute path.
+  /// Throws on failure (name conflict, invalid characters, etc.).
+  Future<String> renameProject(String oldPath, String newName) async {
+    final parentDir = p.dirname(oldPath);
+    final existingNames = (await scanProjects(parentDir))
+        .map((proj) => proj.name)
+        .where((name) => name != p.basename(oldPath))
+        .toList();
+
+    final error = validateProjectName(newName, existingNames);
+    if (error != null) throw Exception(error);
+
+    final newPath = p.join(parentDir, newName);
+    await Directory(oldPath).rename(newPath);
+    return newPath;
+  }
+
   /// Validates a project name. Returns an error message or null if valid.
   String? validateProjectName(String name, List<String> existingNames) {
     final trimmed = name.trim();
