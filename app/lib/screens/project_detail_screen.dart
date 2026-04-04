@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/workspace_provider.dart';
 import 'product_page.dart';
+import 'entity_list_page.dart';
 
 class ProjectDetailScreen extends StatefulWidget {
   const ProjectDetailScreen({super.key});
@@ -30,6 +31,24 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
     Icons.widgets,
     Icons.description,
   ];
+
+  Widget _buildContent(String projectPath) {
+    switch (_selectedIndex) {
+      case 0:
+        return ProductPage(projectPath: projectPath);
+      case 1:
+        return EntityListPage(projectPath: projectPath);
+      default:
+        return Center(
+          child: Text(
+            _menuLabels[_selectedIndex],
+            style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+          ),
+        );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -65,18 +84,9 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
           ),
           const VerticalDivider(thickness: 1, width: 1),
           Expanded(
-            child: _selectedIndex == 0 && activeProject != null
-                ? ProductPage(
-                    projectPath: activeProject.path,
-                  )
-                : Center(
-                    child: Text(
-                      _menuLabels[_selectedIndex],
-                      style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                            color: Theme.of(context).colorScheme.onSurfaceVariant,
-                          ),
-                    ),
-                  ),
+            child: activeProject != null
+                ? _buildContent(activeProject.path)
+                : const SizedBox.shrink(),
           ),
         ],
       ),
