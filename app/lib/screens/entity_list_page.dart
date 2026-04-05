@@ -16,42 +16,90 @@ class _EntityListPageState extends State<EntityListPage> {
   final EntityService _entityService = EntityService();
 
   List<EntitySummary> _entities = [];
+  List<EntitySummary> _types = [];
   bool _isLoading = true;
-  String? _selectedEntityPath;
+
+  // Detail navigation state
+  String? _selectedPath;
+  DetailKind? _selectedKind;
 
   @override
   void initState() {
     super.initState();
-    _loadEntities();
+    _loadAll();
   }
 
-  Future<void> _loadEntities() async {
-    final entities = await _entityService.listEntities(widget.projectPath);
+  Future<void> _loadAll() async {
+    final results = await Future.wait([
+      _entityService.listEntities(widget.projectPath),
+      _entityService.listTypes(widget.projectPath),
+    ]);
     if (!mounted) return;
     setState(() {
-      _entities = entities;
+      _entities = results[0];
+      _types = results[1];
       _isLoading = false;
     });
   }
 
-  void _openEntity(EntitySummary entity) {
+  void _openDetail(EntitySummary item, DetailKind kind) {
     setState(() {
-      _selectedEntityPath = entity.filePath;
+      _selectedPath = item.filePath;
+      _selectedKind = kind;
     });
   }
 
   void _goBackToList() {
     setState(() {
-      _selectedEntityPath = null;
+      _selectedPath = null;
+      _selectedKind = null;
     });
-    _loadEntities();
+    _loadAll();
   }
+
+  // ── Entity CRUD ──
+
+  Future<String?> _createEntity(String name) async {
+    final existingNames = _entities.map((e) => e.name).toList();
+    final error = _entityService.validateEntityName(name, existingNames);
+    if (error != null) return error;
+
+    await _entityService.createEntity(widget.projectPath, name.trim());
+    await _loadAll();
+    return null;
+  }
+
+  Future<void> _deleteEntity(EntitySummary entity) async {
+    await _entityService.deleteEntity(entity.filePath);
+    await _loadAll();
+  }
+
+  // ── Type CRUD ──
+
+  Future<String?> _createType(String name) async {
+    final existingNames = _types.map((e) => e.name).toList();
+    final error = _entityService.validateEntityName(name, existingNames);
+    if (error != null) return error;
+
+    await _entityService.createType(widget.projectPath, name.trim());
+    await _loadAll();
+    return null;
+  }
+
+  Future<void> _deleteType(EntitySummary type) async {
+    await _entityService.deleteType(type.filePath);
+    await _loadAll();
+  }
+
+  // ── Build ──
 
   @override
   Widget build(BuildContext context) {
-    if (_selectedEntityPath != null) {
+    if (_selectedPath != null) {
       return EntityDetailPage(
-        entityFilePath: _selectedEntityPath!,
+        projectPath: widget.projectPath,
+        entityFilePath: _selectedPath!,
+        kind: _selectedKind!,
         onBack: _goBackToList,
       );
     }
@@ -60,75 +108,140 @@ class _EntityListPageState extends State<EntityListPage> {
       return const Center(child: CircularProgressIndicator());
     }
 
-    return Column(
+    return ListView(
       children: [
-        Padding(
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            children: [
-              Text(
-                'Entities',
-                style: Theme.of(context).textTheme.titleLarge,
-              ),
-              const Spacer(),
-              FilledButton.icon(
-                onPressed: _showAddEntityDialog,
-                icon: const Icon(Icons.add),
-                label: const Text('Add Entity'),
-              ),
-            ],
+        // ── Entities section ──
+        _buildSectionHeader(
+          title: 'Entities',
+          onAdd: () => _showAddDialog(
+            title: 'Add Entity',
+            hint: '엔티티 이름을 입력하세요',
+            onCreate: _createEntity,
           ),
         ),
         const Divider(height: 1),
-        Expanded(
-          child: _entities.isEmpty
-              ? Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        Icons.category_outlined,
-                        size: 48,
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        '엔티티가 없습니다',
-                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                              color: Theme.of(context).colorScheme.onSurfaceVariant,
-                            ),
-                      ),
-                      const SizedBox(height: 16),
-                      FilledButton.icon(
-                        onPressed: _showAddEntityDialog,
-                        icon: const Icon(Icons.add),
-                        label: const Text('Add Entity'),
-                      ),
-                    ],
-                  ),
-                )
-              : ListView.builder(
-                  itemCount: _entities.length,
-                  itemBuilder: (context, index) {
-                    final entity = _entities[index];
-                    return ListTile(
-                      leading: const Icon(Icons.category),
-                      title: Text(entity.name),
-                      trailing: IconButton(
-                        icon: const Icon(Icons.delete_outline),
-                        tooltip: '삭제',
-                        onPressed: () => _showDeleteDialog(entity),
-                      ),
-                      onTap: () => _openEntity(entity),
-                    );
-                  },
+        if (_entities.isEmpty)
+          _buildEmptyState(
+            icon: Icons.category_outlined,
+            message: '엔티티가 없습니다',
+            onAdd: () => _showAddDialog(
+              title: 'Add Entity',
+              hint: '엔티티 이름을 입력하세요',
+              onCreate: _createEntity,
+            ),
+          )
+        else
+          ...List.generate(_entities.length, (index) {
+            final entity = _entities[index];
+            return ListTile(
+              leading: const Icon(Icons.category),
+              title: Text(entity.name),
+              trailing: IconButton(
+                icon: const Icon(Icons.delete_outline),
+                tooltip: '삭제',
+                onPressed: () => _showDeleteDialog(
+                  entity,
+                  label: '엔티티',
+                  onConfirm: () => _deleteEntity(entity),
                 ),
+              ),
+              onTap: () => _openDetail(entity, DetailKind.entity),
+            );
+          }),
+
+        const SizedBox(height: 16),
+
+        // ── Types section ──
+        _buildSectionHeader(
+          title: 'Types',
+          onAdd: () => _showAddDialog(
+            title: 'Add Type',
+            hint: '타입 이름을 입력하세요',
+            onCreate: _createType,
+          ),
         ),
+        const Divider(height: 1),
+        if (_types.isEmpty)
+          _buildEmptyState(
+            icon: Icons.data_object,
+            message: '커스텀 타입이 없습니다',
+            onAdd: () => _showAddDialog(
+              title: 'Add Type',
+              hint: '타입 이름을 입력하세요',
+              onCreate: _createType,
+            ),
+          )
+        else
+          ...List.generate(_types.length, (index) {
+            final type = _types[index];
+            return ListTile(
+              leading: const Icon(Icons.data_object),
+              title: Text(type.name),
+              trailing: IconButton(
+                icon: const Icon(Icons.delete_outline),
+                tooltip: '삭제',
+                onPressed: () => _showDeleteDialog(
+                  type,
+                  label: '타입',
+                  onConfirm: () => _deleteType(type),
+                ),
+              ),
+              onTap: () => _openDetail(type, DetailKind.type),
+            );
+          }),
       ],
     );
   }
 
-  Future<void> _showAddEntityDialog() async {
+  // ── Shared UI helpers ──
+
+  Widget _buildSectionHeader({required String title, required VoidCallback onAdd}) {
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Row(
+        children: [
+          Text(title, style: Theme.of(context).textTheme.titleLarge),
+          const Spacer(),
+          FilledButton.icon(
+            onPressed: onAdd,
+            icon: const Icon(Icons.add),
+            label: Text('Add $title'.replaceFirst('s', '')),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEmptyState({
+    required IconData icon,
+    required String message,
+    required VoidCallback onAdd,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 32),
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 48, color: Theme.of(context).colorScheme.onSurfaceVariant),
+            const SizedBox(height: 16),
+            Text(
+              message,
+              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showAddDialog({
+    required String title,
+    required String hint,
+    required Future<String?> Function(String) onCreate,
+  }) async {
     final controller = TextEditingController();
     String? errorText;
 
@@ -137,24 +250,26 @@ class _EntityListPageState extends State<EntityListPage> {
       builder: (dialogContext) {
         return StatefulBuilder(
           builder: (context, setDialogState) {
+            Future<void> submit() async {
+              final error = await onCreate(controller.text);
+              if (error != null) {
+                setDialogState(() => errorText = error);
+              } else {
+                if (dialogContext.mounted) Navigator.of(dialogContext).pop();
+              }
+            }
+
             return AlertDialog(
-              title: const Text('Add Entity'),
+              title: Text(title),
               content: TextField(
                 controller: controller,
                 autofocus: true,
                 decoration: InputDecoration(
-                  hintText: '엔티티 이름을 입력하세요',
+                  hintText: hint,
                   border: const OutlineInputBorder(),
                   errorText: errorText,
                 ),
-                onSubmitted: (_) async {
-                  final error = await _createEntity(controller.text);
-                  if (error != null) {
-                    setDialogState(() => errorText = error);
-                  } else {
-                    if (dialogContext.mounted) Navigator.of(dialogContext).pop();
-                  }
-                },
+                onSubmitted: (_) => submit(),
               ),
               actions: [
                 TextButton(
@@ -162,14 +277,7 @@ class _EntityListPageState extends State<EntityListPage> {
                   child: const Text('Cancel'),
                 ),
                 FilledButton(
-                  onPressed: () async {
-                    final error = await _createEntity(controller.text);
-                    if (error != null) {
-                      setDialogState(() => errorText = error);
-                    } else {
-                      if (dialogContext.mounted) Navigator.of(dialogContext).pop();
-                    }
-                  },
+                  onPressed: submit,
                   child: const Text('Create'),
                 ),
               ],
@@ -182,23 +290,17 @@ class _EntityListPageState extends State<EntityListPage> {
     controller.dispose();
   }
 
-  Future<String?> _createEntity(String name) async {
-    final existingNames = _entities.map((e) => e.name).toList();
-    final error = _entityService.validateEntityName(name, existingNames);
-    if (error != null) return error;
-
-    await _entityService.createEntity(widget.projectPath, name.trim());
-    await _loadEntities();
-    return null;
-  }
-
-  Future<void> _showDeleteDialog(EntitySummary entity) async {
+  Future<void> _showDeleteDialog(
+    EntitySummary item, {
+    required String label,
+    required Future<void> Function() onConfirm,
+  }) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) {
         return AlertDialog(
-          title: const Text('엔티티 삭제'),
-          content: Text("'${entity.name}' 엔티티를 삭제하시겠습니까?"),
+          title: Text('$label 삭제'),
+          content: Text("'${item.name}' $label을(를) 삭제하시겠습니까?"),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(dialogContext).pop(false),
@@ -217,8 +319,7 @@ class _EntityListPageState extends State<EntityListPage> {
     );
 
     if (confirmed == true) {
-      await _entityService.deleteEntity(entity.filePath);
-      await _loadEntities();
+      await onConfirm();
     }
   }
 }

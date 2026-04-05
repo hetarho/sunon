@@ -91,7 +91,7 @@
 - **FR-002**: 시스템은 "Add Entity" 버튼을 제공하여 새 엔티티 생성 모달을 열 수 있어야 한다.
 - **FR-003**: 시스템은 모달에서 입력된 엔티티명으로 `entities/{entity_name}.md` 파일을 생성해야 한다.
 - **FR-004**: 시스템은 중복 엔티티명 및 빈 이름에 대한 유효성 검사를 수행해야 한다.
-- **FR-005**: 시스템은 엔티티 상세 페이지에서 칼럼(이름, 데이터 타입, 필수 여부, 설명)을 추가, 편집, 삭제할 수 있어야 한다.
+- **FR-005**: 시스템은 엔티티 상세 페이지에서 칼럼(이름, 데이터 타입, 배열 여부, 필수 여부, 설명)을 추가, 편집, 삭제할 수 있어야 한다.
 - **FR-006**: 시스템은 칼럼 변경 시 디바운스 방식으로 자동 저장하여 md 파일에 반영해야 한다.
 - **FR-007**: 시스템은 md 파일을 파싱하여 칼럼 정보를 테이블 형태로 표시해야 한다.
 - **FR-008**: 시스템은 entities 디렉토리가 없는 경우 자동으로 생성해야 한다.
@@ -107,24 +107,28 @@
 
 ## columns
 
-| name | type | required | description |
-|------|------|----------|-------------|
-| id | int | true | 고유 식별자 |
-| title | string | true | 제목 |
-| created_at | datetime | false | 생성 일시 |
+| name | type | isList | required | description |
+|------|------|--------|----------|-------------|
+| id | int | false | true | 고유 식별자 |
+| title | string | false | true | 제목 |
+| tags | string | true | false | 태그 목록 |
+| created_at | datetime | false | false | 생성 일시 |
 ```
 
 - 최상위 `# ` 헤딩은 엔티티 이름을 나타낸다.
 - `## columns` 섹션은 마크다운 테이블 형식으로 칼럼을 정의한다.
-- 테이블 헤더는 `name`, `type`, `required`, `description`으로 고정한다.
-- 지원하는 데이터 타입: `int`, `string`, `float`, `bool`, `datetime`, `text`
+- 테이블 헤더는 `name`, `type`, `isList`, `required`, `description`으로 고정한다.
+- 지원하는 기본 데이터 타입: `int`, `string`, `float`, `bool`, `datetime`, `text`
+- 동일 프로젝트 내 다른 엔티티 및 커스텀 타입도 칼럼의 타입으로 사용할 수 있다. 드롭다운에서 기본 타입, 엔티티, 커스텀 타입을 구분선(Divider)으로 구분하여 표시한다.
+- 커스텀 타입은 엔티티와 동일한 구조(이름 + 칼럼 목록)를 가지며, `types/` 디렉토리에 저장한다. 엔티티 자체는 아니지만 칼럼의 하위 타입으로 사용되는 복합 타입이다.
+- `isList` 값은 `true` 또는 `false`이며, 기본값은 `false`이다. `true`이면 해당 타입의 배열을 나타낸다.
 - `required` 값은 `true` 또는 `false`이며, 기본값은 `false`이다.
 - `description`은 칼럼에 대한 간단한 설명이며, 비워둘 수 있다.
 
 ### Key Entities
 
 - **Entity**: 데이터 모델을 나타내는 단위. 이름을 가지며 여러 칼럼을 포함한다. 각 엔티티는 하나의 md 파일에 대응한다.
-- **Column**: 엔티티를 구성하는 필드. 이름(name), 데이터 타입(type), 필수 여부(required), 설명(description)을 속성으로 가진다.
+- **Column**: 엔티티를 구성하는 필드. 이름(name), 데이터 타입(type), 배열 여부(isList), 필수 여부(required), 설명(description)을 속성으로 가진다.
 
 ## Clarifications
 
@@ -149,5 +153,5 @@
 - 프로젝트 템플릿에 이미 `entities/` 디렉토리가 포함되어 있다(004-add-project에서 생성).
 - 기존 Product 페이지와 동일한 디바운스 자동 저장 패턴(500ms)을 따른다.
 - 엔티티명은 파일명으로 사용되므로 영문, 숫자, 밑줄, 하이픈, 공백을 허용한다.
-- 데이터 타입은 초기 버전에서 고정된 목록(`int`, `string`, `float`, `bool`, `datetime`, `text`)으로 제공하며, 사용자 정의 타입은 향후 확장한다.
+- 데이터 타입은 기본 타입(`int`, `string`, `float`, `bool`, `datetime`, `text`)과 프로젝트 내 엔티티 타입을 모두 지원한다.
 - 사이드바의 Entities 메뉴(index 1)는 이미 존재하며, 현재 플레이스홀더 텍스트를 실제 엔티티 페이지로 교체한다.

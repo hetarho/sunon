@@ -3,7 +3,7 @@ import 'package:path/path.dart' as p;
 import '../models/product_document.dart';
 
 class ProductService {
-  static const _knownSections = {'mission', 'principles'};
+  static const _knownSections = {'mission', 'benefit', 'principles'};
 
   Future<ProductDocument> load(String projectPath) async {
     final file = File(p.join(projectPath, 'product.md'));
@@ -84,6 +84,13 @@ class ProductService {
 
     doc.mission = (sectionBodies['mission']?.toString() ?? '').trim();
 
+    final benefitsRaw = sectionBodies['benefit']?.toString() ?? '';
+    doc.benefits = benefitsRaw
+        .split('\n')
+        .where((l) => l.trimLeft().startsWith('- '))
+        .map((l) => l.trimLeft().substring(2))
+        .toList();
+
     final principlesRaw = sectionBodies['principles']?.toString() ?? '';
     doc.principles = principlesRaw
         .split('\n')
@@ -106,6 +113,13 @@ class ProductService {
     buf.writeln('## mission');
     if (doc.mission.isNotEmpty) {
       buf.writeln(doc.mission);
+    }
+
+    buf.writeln();
+    buf.writeln('## benefit');
+    final nonEmptyBenefits = doc.benefits.where((b) => b.trim().isNotEmpty);
+    for (final benefit in nonEmptyBenefits) {
+      buf.writeln('- $benefit');
     }
 
     buf.writeln();

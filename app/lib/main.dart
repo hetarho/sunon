@@ -13,16 +13,17 @@ Future<void> main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
   await windowManager.ensureInitialized();
 
-  final windowController = await WindowController.fromCurrentEngine();
-  final windowArgs = windowController.arguments;
-
   // Determine if this is a sub-window (new window)
   bool isNewWindow = false;
-  if (windowArgs.isNotEmpty) {
-    try {
+  try {
+    final windowController = await WindowController.fromCurrentEngine();
+    final windowArgs = windowController.arguments;
+    if (windowArgs.isNotEmpty) {
       final parsed = jsonDecode(windowArgs) as Map<String, dynamic>;
       isNewWindow = parsed['newWindow'] == true;
-    } catch (_) {}
+    }
+  } catch (_) {
+    // Main window or invalid engine handle — continue as main window
   }
 
   if (isNewWindow) {

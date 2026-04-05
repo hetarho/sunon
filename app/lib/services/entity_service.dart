@@ -37,12 +37,49 @@ class EntityService {
     final doc = EntityDocument.empty();
 
     String? currentSection;
+    String? currentLocalTypeName;
+    List<EntityColumn>? currentColumns;
+    String? currentEnumName;
+    List<String>? currentEnumValues;
     final unknownSections = <RawSection>[];
     String? unknownHeading;
     StringBuffer? unknownBody;
     var nameFound = false;
     var headerSkipped = false;
     var separatorSkipped = false;
+
+    void flushUnknown() {
+      if (unknownHeading != null) {
+        unknownSections.add(RawSection(
+          heading: unknownHeading!,
+          body: unknownBody.toString().trim(),
+        ));
+        unknownHeading = null;
+        unknownBody = null;
+      }
+    }
+
+    void flushLocalType() {
+      if (currentLocalTypeName != null && currentColumns != null) {
+        doc.localTypes.add(LocalType(
+          name: currentLocalTypeName!,
+          columns: currentColumns!,
+        ));
+        currentLocalTypeName = null;
+        currentColumns = null;
+      }
+    }
+
+    void flushLocalEnum() {
+      if (currentEnumName != null && currentEnumValues != null) {
+        doc.localEnums.add(LocalEnum(
+          name: currentEnumName!,
+          values: currentEnumValues!,
+        ));
+        currentEnumName = null;
+        currentEnumValues = null;
+      }
+    }
 
     for (final line in lines) {
       if (line.startsWith('# ') && !nameFound) {
@@ -53,21 +90,28 @@ class EntityService {
       }
 
       if (line.startsWith('## ')) {
-        // Flush previous unknown section
-        if (unknownHeading != null) {
-          unknownSections.add(RawSection(
-            heading: unknownHeading,
-            body: unknownBody.toString().trim(),
-          ));
-          unknownHeading = null;
-          unknownBody = null;
-        }
+        flushUnknown();
+        flushLocalType();
+        flushLocalEnum();
 
-        final key = line.substring(3).trim().toLowerCase();
+        final raw = line.substring(3).trim();
+        final key = raw.toLowerCase();
+
         if (key == 'columns') {
           currentSection = 'columns';
+          currentColumns = null;
           headerSkipped = false;
           separatorSkipped = false;
+        } else if (key.startsWith('type:')) {
+          currentSection = 'localtype';
+          currentLocalTypeName = raw.substring(5).trim();
+          currentColumns = [];
+          headerSkipped = false;
+          separatorSkipped = false;
+        } else if (key.startsWith('enum:')) {
+          currentSection = 'localenum';
+          currentEnumName = raw.substring(5).trim();
+          currentEnumValues = [];
         } else {
           currentSection = '_unknown';
           unknownHeading = line;
@@ -76,50 +120,56 @@ class EntityService {
         continue;
       }
 
-      if (currentSection == 'columns') {
+      if (currentSection == 'columns' || currentSection == 'localtype') {
         final trimmed = line.trim();
         if (trimmed.isEmpty) continue;
         if (!trimmed.startsWith('|')) continue;
 
-        if (!headerSkipped) {
-          headerSkipped = true;
-          continue;
-        }
-        if (!separatorSkipped) {
-          separatorSkipped = true;
-          continue;
-        }
+        if (!headerSkipped) { headerSkipped = true; continue; }
+        if (!separatorSkipped) { separatorSkipped = true; continue; }
 
-        // Parse data row: | name | type | required | description |
-        final cells = trimmed
-            .split('|')
-            .map((c) => c.trim())
-            .where((c) => c.isNotEmpty)
-            .toList();
-
-        if (cells.isNotEmpty) {
-          doc.columns.add(EntityColumn(
-            name: cells.isNotEmpty ? cells[0] : '',
-            type: cells.length > 1 ? cells[1] : 'string',
-            required: cells.length > 2 ? cells[2].toLowerCase() == 'true' : false,
-            description: cells.length > 3 ? cells[3] : '',
-          ));
+        final cols = currentSection == 'columns' ? doc.columns : currentColumns!;
+        _parseTableRow(trimmed, cols);
+      } else if (currentSection == 'localenum') {
+        final trimmed = line.trim();
+        if (trimmed.isEmpty) continue;
+        if (trimmed.startsWith('- ')) {
+          currentEnumValues!.add(trimmed.substring(2));
         }
       } else if (currentSection == '_unknown' && unknownBody != null) {
-        unknownBody.writeln(line);
+        unknownBody!.writeln(line);
       }
     }
 
-    // Flush last unknown section
-    if (unknownHeading != null) {
-      unknownSections.add(RawSection(
-        heading: unknownHeading,
-        body: unknownBody.toString().trim(),
-      ));
-    }
+    flushUnknown();
+    flushLocalType();
+    flushLocalEnum();
 
     doc.unknownSections = unknownSections;
     return doc;
+  }
+
+  void _parseTableRow(String trimmed, List<EntityColumn> target) {
+    final cells = trimmed.split('|').map((c) => c.trim()).toList();
+
+    if (cells.length >= 6) {
+      // | name | type | isList | required | description |
+      target.add(EntityColumn(
+        name: cells[1],
+        type: cells[2],
+        isList: cells[3].toLowerCase() == 'true',
+        required: cells[4].toLowerCase() == 'true',
+        description: cells[5],
+      ));
+    } else if (cells.length >= 5) {
+      // Legacy: | name | type | required | description |
+      target.add(EntityColumn(
+        name: cells[1],
+        type: cells[2],
+        required: cells[3].toLowerCase() == 'true',
+        description: cells[4],
+      ));
+    }
   }
 
   String serialize(EntityDocument doc) {
@@ -129,10 +179,29 @@ class EntityService {
     buf.writeln();
     buf.writeln('## columns');
     buf.writeln();
-    buf.writeln('| name | type | required | description |');
-    buf.writeln('|------|------|----------|-------------|');
+    buf.writeln('| name | type | isList | required | description |');
+    buf.writeln('|------|------|--------|----------|-------------|');
     for (final col in doc.columns) {
-      buf.writeln('| ${col.name} | ${col.type} | ${col.required} | ${col.description} |');
+      buf.writeln('| ${col.name} | ${col.type} | ${col.isList} | ${col.required} | ${col.description} |');
+    }
+
+    for (final lt in doc.localTypes) {
+      buf.writeln();
+      buf.writeln('## type: ${lt.name}');
+      buf.writeln();
+      buf.writeln('| name | type | isList | required | description |');
+      buf.writeln('|------|------|--------|----------|-------------|');
+      for (final col in lt.columns) {
+        buf.writeln('| ${col.name} | ${col.type} | ${col.isList} | ${col.required} | ${col.description} |');
+      }
+    }
+
+    for (final le in doc.localEnums) {
+      buf.writeln();
+      buf.writeln('## enum: ${le.name}');
+      for (final v in le.values) {
+        if (v.trim().isNotEmpty) buf.writeln('- $v');
+      }
     }
 
     for (final section in doc.unknownSections) {
@@ -169,6 +238,47 @@ class EntityService {
   }
 
   Future<void> deleteEntity(String filePath) async {
+    final file = File(filePath);
+    if (await file.exists()) {
+      await file.delete();
+    }
+  }
+
+  // ── Custom Types (stored in types/ directory, same format as entities) ──
+
+  Future<List<EntitySummary>> listTypes(String projectPath) async {
+    final dir = Directory(p.join(projectPath, 'types'));
+    if (!await dir.exists()) {
+      await dir.create(recursive: true);
+    }
+
+    final types = <EntitySummary>[];
+    await for (final entry in dir.list()) {
+      if (entry is File && entry.path.endsWith('.md')) {
+        final name = p.basenameWithoutExtension(entry.path);
+        types.add(EntitySummary(name: name, filePath: entry.path));
+      }
+    }
+    types.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+    return types;
+  }
+
+  Future<String> createType(String projectPath, String typeName) async {
+    final dir = Directory(p.join(projectPath, 'types'));
+    if (!await dir.exists()) {
+      await dir.create(recursive: true);
+    }
+
+    final filePath = p.join(dir.path, '$typeName.md');
+    final file = File(filePath);
+
+    final doc = EntityDocument(name: typeName);
+    await file.writeAsString(serialize(doc));
+
+    return filePath;
+  }
+
+  Future<void> deleteType(String filePath) async {
     final file = File(filePath);
     if (await file.exists()) {
       await file.delete();

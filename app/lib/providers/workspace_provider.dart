@@ -99,7 +99,6 @@ class WorkspaceProvider extends ChangeNotifier {
   }
 
   /// Update a project's path and name after folder rename.
-  /// Silent — no notifyListeners() to avoid rebuilding ProductPage mid-edit.
   void updateProjectPath(String oldPath, String newPath, String newName) {
     if (_workspace == null) return;
     for (final p in _workspace!.projects) {
@@ -109,6 +108,7 @@ class WorkspaceProvider extends ChangeNotifier {
         break;
       }
     }
+    notifyListeners();
   }
 
   /// Refresh the project list (re-scan workspace directory).

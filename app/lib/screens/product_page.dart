@@ -22,6 +22,7 @@ class _ProductPageState extends State<ProductPage> {
 
   final _nameController = TextEditingController();
   final _missionController = TextEditingController();
+  final _benefitControllers = <TextEditingController>[];
   final _principleControllers = <TextEditingController>[];
 
   ProductDocument _doc = ProductDocument.empty();
@@ -52,6 +53,13 @@ class _ProductPageState extends State<ProductPage> {
       _missionController.text = doc.mission;
       _lastSavedName = doc.name;
 
+      _disposeBenefitControllers();
+      for (final benefit in doc.benefits) {
+        final c = TextEditingController(text: benefit);
+        c.addListener(_onFieldChanged);
+        _benefitControllers.add(c);
+      }
+
       _disposePrincipleControllers();
       for (final principle in doc.principles) {
         final c = TextEditingController(text: principle);
@@ -75,6 +83,7 @@ class _ProductPageState extends State<ProductPage> {
     return ProductDocument(
       name: _nameController.text,
       mission: _missionController.text,
+      benefits: _benefitControllers.map((c) => c.text).toList(),
       principles: _principleControllers.map((c) => c.text).toList(),
       unknownSections: _doc.unknownSections,
     );
@@ -136,6 +145,32 @@ class _ProductPageState extends State<ProductPage> {
     _onFieldChanged();
   }
 
+  void _disposeBenefitControllers() {
+    for (final c in _benefitControllers) {
+      c.removeListener(_onFieldChanged);
+      c.dispose();
+    }
+    _benefitControllers.clear();
+  }
+
+  void _addBenefit() {
+    setState(() {
+      final c = TextEditingController();
+      c.addListener(_onFieldChanged);
+      _benefitControllers.add(c);
+    });
+    _onFieldChanged();
+  }
+
+  void _removeBenefit(int index) {
+    setState(() {
+      _benefitControllers[index].removeListener(_onFieldChanged);
+      _benefitControllers[index].dispose();
+      _benefitControllers.removeAt(index);
+    });
+    _onFieldChanged();
+  }
+
   void _disposePrincipleControllers() {
     for (final c in _principleControllers) {
       c.removeListener(_onFieldChanged);
@@ -153,6 +188,7 @@ class _ProductPageState extends State<ProductPage> {
 
     _nameController.dispose();
     _missionController.dispose();
+    _disposeBenefitControllers();
     _disposePrincipleControllers();
     super.dispose();
   }
@@ -168,7 +204,10 @@ class _ProductPageState extends State<ProductPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildSectionLabel('Product Name'),
+          _buildSectionLabel(
+            'Product Name',
+            tooltip: '프로덕트의 고유한 이름입니다. 변경 시 프로젝트 폴더명도 함께 변경됩니다.',
+          ),
           TextField(
             controller: _nameController,
             decoration: const InputDecoration(
@@ -177,7 +216,10 @@ class _ProductPageState extends State<ProductPage> {
             ),
           ),
           const SizedBox(height: 24),
-          _buildSectionLabel('Mission'),
+          _buildSectionLabel(
+            'Mission',
+            tooltip: '프로덕트가 존재하는 근본적인 이유입니다. 어떤 문제를 어떻게 해결하는지 한 문장으로 표현하세요.',
+          ),
           TextField(
             controller: _missionController,
             maxLines: null,
@@ -188,8 +230,31 @@ class _ProductPageState extends State<ProductPage> {
             ),
           ),
           const SizedBox(height: 24),
-          _buildSectionLabel('Principles'),
-          ..._buildPrinciplesList(),
+          _buildSectionLabel(
+            'Benefit',
+            tooltip: '사용자가 이 프로덕트를 통해 얻는 핵심 혜택입니다. 사용자 관점에서 구체적인 가치를 작성하세요.',
+          ),
+          ..._buildListSection(
+            controllers: _benefitControllers,
+            hintText: '혜택을 입력하세요',
+            onRemove: _removeBenefit,
+          ),
+          const SizedBox(height: 8),
+          TextButton.icon(
+            onPressed: _addBenefit,
+            icon: const Icon(Icons.add),
+            label: const Text('혜택 추가'),
+          ),
+          const SizedBox(height: 24),
+          _buildSectionLabel(
+            'Principles',
+            tooltip: '프로덕트를 만들 때 지켜야 할 핵심 원칙들입니다. 의사결정의 기준이 되는 철학을 나열하세요.',
+          ),
+          ..._buildListSection(
+            controllers: _principleControllers,
+            hintText: '원칙을 입력하세요',
+            onRemove: _removePrinciple,
+          ),
           const SizedBox(height: 8),
           TextButton.icon(
             onPressed: _addPrinciple,
@@ -201,35 +266,50 @@ class _ProductPageState extends State<ProductPage> {
     );
   }
 
-  Widget _buildSectionLabel(String label) {
+  Widget _buildSectionLabel(String label, {required String tooltip}) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
-      child: Text(
-        label,
-        style: Theme.of(context).textTheme.titleMedium,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(label, style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(width: 4),
+          Tooltip(
+            message: tooltip,
+            child: Icon(
+              Icons.info_outline,
+              size: 18,
+              color: Theme.of(context).colorScheme.outline,
+            ),
+          ),
+        ],
       ),
     );
   }
 
-  List<Widget> _buildPrinciplesList() {
-    return List.generate(_principleControllers.length, (index) {
+  List<Widget> _buildListSection({
+    required List<TextEditingController> controllers,
+    required String hintText,
+    required void Function(int) onRemove,
+  }) {
+    return List.generate(controllers.length, (index) {
       return Padding(
         padding: const EdgeInsets.only(bottom: 8),
         child: Row(
           children: [
             Expanded(
               child: TextField(
-                controller: _principleControllers[index],
-                decoration: const InputDecoration(
-                  hintText: '원칙을 입력하세요',
-                  border: OutlineInputBorder(),
+                controller: controllers[index],
+                decoration: InputDecoration(
+                  hintText: hintText,
+                  border: const OutlineInputBorder(),
                   isDense: true,
                 ),
               ),
             ),
             const SizedBox(width: 8),
             IconButton(
-              onPressed: () => _removePrinciple(index),
+              onPressed: () => onRemove(index),
               icon: const Icon(Icons.close),
               tooltip: '삭제',
             ),
