@@ -1,21 +1,21 @@
 import 'package:flutter/material.dart';
-import '../models/entity_document.dart';
-import '../services/entity_service.dart';
-import 'entity_detail_page.dart';
+import '../models/policy_document.dart';
+import '../services/policy_service.dart';
+import 'policy_detail_page.dart';
 
-class EntityListPage extends StatefulWidget {
+class PolicyListPage extends StatefulWidget {
   final String projectPath;
 
-  const EntityListPage({super.key, required this.projectPath});
+  const PolicyListPage({super.key, required this.projectPath});
 
   @override
-  State<EntityListPage> createState() => _EntityListPageState();
+  State<PolicyListPage> createState() => _PolicyListPageState();
 }
 
-class _EntityListPageState extends State<EntityListPage> {
-  final EntityService _entityService = EntityService();
+class _PolicyListPageState extends State<PolicyListPage> {
+  final PolicyService _policyService = PolicyService();
 
-  List<EntitySummary> _entities = [];
+  List<PolicySummary> _policies = [];
   bool _isLoading = true;
 
   // Detail navigation state
@@ -28,15 +28,15 @@ class _EntityListPageState extends State<EntityListPage> {
   }
 
   Future<void> _loadAll() async {
-    final entities = await _entityService.listEntities(widget.projectPath);
+    final policies = await _policyService.listPolicies(widget.projectPath);
     if (!mounted) return;
     setState(() {
-      _entities = entities;
+      _policies = policies;
       _isLoading = false;
     });
   }
 
-  void _openDetail(EntitySummary item) {
+  void _openDetail(PolicySummary item) {
     setState(() {
       _selectedPath = item.filePath;
     });
@@ -49,27 +49,32 @@ class _EntityListPageState extends State<EntityListPage> {
     _loadAll();
   }
 
-  Future<String?> _createEntity(String name) async {
-    final existingNames = _entities.map((e) => e.name).toList();
-    final error = _entityService.validateEntityName(name, existingNames);
+  Future<String?> _createPolicy(String name) async {
+    final existingNames = _policies.map((e) => e.name).toList();
+    final error = _policyService.validatePolicyName(name, existingNames);
     if (error != null) return error;
 
-    await _entityService.createEntity(widget.projectPath, name.trim());
+    final filePath =
+        await _policyService.createPolicy(widget.projectPath, name.trim());
     await _loadAll();
+    // Navigate to newly created policy
+    setState(() {
+      _selectedPath = filePath;
+    });
     return null;
   }
 
-  Future<void> _deleteEntity(EntitySummary entity) async {
-    await _entityService.deleteEntity(entity.filePath);
+  Future<void> _deletePolicy(PolicySummary policy) async {
+    await _policyService.deletePolicy(policy.filePath);
     await _loadAll();
   }
 
   @override
   Widget build(BuildContext context) {
     if (_selectedPath != null) {
-      return EntityDetailPage(
+      return PolicyDetailPage(
         projectPath: widget.projectPath,
-        entityFilePath: _selectedPath!,
+        policyFilePath: _selectedPath!,
         onBack: _goBackToList,
       );
     }
@@ -80,78 +85,58 @@ class _EntityListPageState extends State<EntityListPage> {
 
     return ListView(
       children: [
-        _buildSectionHeader(
-          title: '데이터 항목',
-          onAdd: () => _showAddDialog(
-            title: '데이터 항목 추가',
-            hint: '데이터 항목 이름을 입력하세요',
-            onCreate: _createEntity,
-          ),
-        ),
+        _buildSectionHeader(),
         const Divider(height: 1),
-        if (_entities.isEmpty)
-          _buildEmptyState(
-            icon: Icons.category_outlined,
-            message: '데이터 항목이 없습니다',
-            onAdd: () => _showAddDialog(
-              title: '데이터 항목 추가',
-              hint: '데이터 항목 이름을 입력하세요',
-              onCreate: _createEntity,
-            ),
-          )
+        if (_policies.isEmpty)
+          _buildEmptyState()
         else
-          ...List.generate(_entities.length, (index) {
-            final entity = _entities[index];
+          ...List.generate(_policies.length, (index) {
+            final policy = _policies[index];
             return ListTile(
-              leading: const Icon(Icons.category),
-              title: Text(entity.name),
+              leading: const Icon(Icons.policy),
+              title: Text(policy.name),
               trailing: IconButton(
                 icon: const Icon(Icons.delete_outline),
                 tooltip: '삭제',
-                onPressed: () => _showDeleteDialog(
-                  entity,
-                  onConfirm: () => _deleteEntity(entity),
-                ),
+                onPressed: () => _showDeleteDialog(policy),
               ),
-              onTap: () => _openDetail(entity),
+              onTap: () => _openDetail(policy),
             );
           }),
       ],
     );
   }
 
-  Widget _buildSectionHeader({required String title, required VoidCallback onAdd}) {
+  Widget _buildSectionHeader() {
     return Padding(
       padding: const EdgeInsets.all(16),
       child: Row(
         children: [
-          Text(title, style: Theme.of(context).textTheme.titleLarge),
+          Text('Policies', style: Theme.of(context).textTheme.titleLarge),
           const Spacer(),
           FilledButton.icon(
-            onPressed: onAdd,
+            onPressed: () => _showAddDialog(),
             icon: const Icon(Icons.add),
-            label: const Text('데이터 항목 추가'),
+            label: const Text('Policy 추가'),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildEmptyState({
-    required IconData icon,
-    required String message,
-    required VoidCallback onAdd,
-  }) {
+  Widget _buildEmptyState() {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 32),
       child: Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 48, color: Theme.of(context).colorScheme.onSurfaceVariant),
+            Icon(Icons.policy_outlined,
+                size: 48,
+                color: Theme.of(context).colorScheme.onSurfaceVariant),
             const SizedBox(height: 16),
             Text(
-              message,
+              'Policy가 없습니다',
               style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                     color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
@@ -162,11 +147,7 @@ class _EntityListPageState extends State<EntityListPage> {
     );
   }
 
-  Future<void> _showAddDialog({
-    required String title,
-    required String hint,
-    required Future<String?> Function(String) onCreate,
-  }) async {
+  Future<void> _showAddDialog() async {
     final controller = TextEditingController();
     String? errorText;
 
@@ -176,7 +157,7 @@ class _EntityListPageState extends State<EntityListPage> {
         return StatefulBuilder(
           builder: (context, setDialogState) {
             Future<void> submit() async {
-              final error = await onCreate(controller.text);
+              final error = await _createPolicy(controller.text);
               if (error != null) {
                 setDialogState(() => errorText = error);
               } else {
@@ -185,12 +166,12 @@ class _EntityListPageState extends State<EntityListPage> {
             }
 
             return AlertDialog(
-              title: Text(title),
+              title: const Text('Policy 추가'),
               content: TextField(
                 controller: controller,
                 autofocus: true,
                 decoration: InputDecoration(
-                  hintText: hint,
+                  hintText: 'Policy 이름을 입력하세요',
                   border: const OutlineInputBorder(),
                   errorText: errorText,
                 ),
@@ -215,16 +196,13 @@ class _EntityListPageState extends State<EntityListPage> {
     controller.dispose();
   }
 
-  Future<void> _showDeleteDialog(
-    EntitySummary item, {
-    required Future<void> Function() onConfirm,
-  }) async {
+  Future<void> _showDeleteDialog(PolicySummary item) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) {
         return AlertDialog(
-          title: const Text('데이터 항목 삭제'),
-          content: Text("'${item.name}' 데이터 항목을 삭제하시겠습니까?"),
+          title: const Text('Policy 삭제'),
+          content: Text("'${item.name}' Policy를 삭제하시겠습니까?"),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(dialogContext).pop(false),
@@ -243,7 +221,7 @@ class _EntityListPageState extends State<EntityListPage> {
     );
 
     if (confirmed == true) {
-      await onConfirm();
+      await _deletePolicy(item);
     }
   }
 }

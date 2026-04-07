@@ -1,66 +1,25 @@
 import 'product_document.dart';
 
-const List<String> supportedColumnTypes = [
-  'int',
-  'string',
-  'float',
-  'bool',
-  'datetime',
-  'text',
-];
-
-class EntityColumn {
+class Attribute {
   String name;
-  String type;
-  bool isList;
-  bool required;
-  String description;
+  String info;
 
-  EntityColumn({
+  Attribute({
     this.name = '',
-    this.type = 'string',
-    this.isList = false,
-    this.required = false,
-    this.description = '',
+    this.info = '',
   });
-}
-
-class LocalType {
-  String name;
-  List<EntityColumn> columns;
-
-  LocalType({
-    this.name = '',
-    List<EntityColumn>? columns,
-  }) : columns = columns ?? [];
-}
-
-class LocalEnum {
-  String name;
-  List<String> values;
-
-  LocalEnum({
-    this.name = '',
-    List<String>? values,
-  }) : values = values ?? [];
 }
 
 class EntityDocument {
   String name;
-  List<EntityColumn> columns;
-  List<LocalType> localTypes;
-  List<LocalEnum> localEnums;
+  List<Attribute> attributes;
   List<RawSection> unknownSections;
 
   EntityDocument({
     this.name = '',
-    List<EntityColumn>? columns,
-    List<LocalType>? localTypes,
-    List<LocalEnum>? localEnums,
+    List<Attribute>? attributes,
     List<RawSection>? unknownSections,
-  })  : columns = columns ?? [],
-        localTypes = localTypes ?? [],
-        localEnums = localEnums ?? [],
+  })  : attributes = attributes ?? [],
         unknownSections = unknownSections ?? [];
 
   factory EntityDocument.empty() => EntityDocument();

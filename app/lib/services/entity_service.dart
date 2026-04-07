@@ -7,7 +7,7 @@ class EntityService {
   static const _illegalChars = r'/\:*?"<>|';
 
   Future<List<EntitySummary>> listEntities(String projectPath) async {
-    final dir = Directory(p.join(projectPath, 'entities'));
+    final dir = Directory(p.join(projectPath, 'data'));
     if (!await dir.exists()) {
       await dir.create(recursive: true);
     }
@@ -37,10 +37,6 @@ class EntityService {
     final doc = EntityDocument.empty();
 
     String? currentSection;
-    String? currentLocalTypeName;
-    List<EntityColumn>? currentColumns;
-    String? currentEnumName;
-    List<String>? currentEnumValues;
     final unknownSections = <RawSection>[];
     String? unknownHeading;
     StringBuffer? unknownBody;
@@ -59,28 +55,6 @@ class EntityService {
       }
     }
 
-    void flushLocalType() {
-      if (currentLocalTypeName != null && currentColumns != null) {
-        doc.localTypes.add(LocalType(
-          name: currentLocalTypeName!,
-          columns: currentColumns!,
-        ));
-        currentLocalTypeName = null;
-        currentColumns = null;
-      }
-    }
-
-    void flushLocalEnum() {
-      if (currentEnumName != null && currentEnumValues != null) {
-        doc.localEnums.add(LocalEnum(
-          name: currentEnumName!,
-          values: currentEnumValues!,
-        ));
-        currentEnumName = null;
-        currentEnumValues = null;
-      }
-    }
-
     for (final line in lines) {
       if (line.startsWith('# ') && !nameFound) {
         nameFound = true;
@@ -91,27 +65,14 @@ class EntityService {
 
       if (line.startsWith('## ')) {
         flushUnknown();
-        flushLocalType();
-        flushLocalEnum();
 
         final raw = line.substring(3).trim();
         final key = raw.toLowerCase();
 
-        if (key == 'columns') {
-          currentSection = 'columns';
-          currentColumns = null;
+        if (key == '속성') {
+          currentSection = 'attributes';
           headerSkipped = false;
           separatorSkipped = false;
-        } else if (key.startsWith('type:')) {
-          currentSection = 'localtype';
-          currentLocalTypeName = raw.substring(5).trim();
-          currentColumns = [];
-          headerSkipped = false;
-          separatorSkipped = false;
-        } else if (key.startsWith('enum:')) {
-          currentSection = 'localenum';
-          currentEnumName = raw.substring(5).trim();
-          currentEnumValues = [];
         } else {
           currentSection = '_unknown';
           unknownHeading = line;
@@ -120,7 +81,7 @@ class EntityService {
         continue;
       }
 
-      if (currentSection == 'columns' || currentSection == 'localtype') {
+      if (currentSection == 'attributes') {
         final trimmed = line.trim();
         if (trimmed.isEmpty) continue;
         if (!trimmed.startsWith('|')) continue;
@@ -128,13 +89,12 @@ class EntityService {
         if (!headerSkipped) { headerSkipped = true; continue; }
         if (!separatorSkipped) { separatorSkipped = true; continue; }
 
-        final cols = currentSection == 'columns' ? doc.columns : currentColumns!;
-        _parseTableRow(trimmed, cols);
-      } else if (currentSection == 'localenum') {
-        final trimmed = line.trim();
-        if (trimmed.isEmpty) continue;
-        if (trimmed.startsWith('- ')) {
-          currentEnumValues!.add(trimmed.substring(2));
+        final cells = trimmed.split('|').map((c) => c.trim()).toList();
+        if (cells.length >= 3) {
+          doc.attributes.add(Attribute(
+            name: cells[1],
+            info: cells[2],
+          ));
         }
       } else if (currentSection == '_unknown' && unknownBody != null) {
         unknownBody!.writeln(line);
@@ -142,34 +102,8 @@ class EntityService {
     }
 
     flushUnknown();
-    flushLocalType();
-    flushLocalEnum();
-
     doc.unknownSections = unknownSections;
     return doc;
-  }
-
-  void _parseTableRow(String trimmed, List<EntityColumn> target) {
-    final cells = trimmed.split('|').map((c) => c.trim()).toList();
-
-    if (cells.length >= 6) {
-      // | name | type | isList | required | description |
-      target.add(EntityColumn(
-        name: cells[1],
-        type: cells[2],
-        isList: cells[3].toLowerCase() == 'true',
-        required: cells[4].toLowerCase() == 'true',
-        description: cells[5],
-      ));
-    } else if (cells.length >= 5) {
-      // Legacy: | name | type | required | description |
-      target.add(EntityColumn(
-        name: cells[1],
-        type: cells[2],
-        required: cells[3].toLowerCase() == 'true',
-        description: cells[4],
-      ));
-    }
   }
 
   String serialize(EntityDocument doc) {
@@ -177,31 +111,12 @@ class EntityService {
 
     buf.writeln('# ${doc.name}');
     buf.writeln();
-    buf.writeln('## columns');
+    buf.writeln('## 속성');
     buf.writeln();
-    buf.writeln('| name | type | isList | required | description |');
-    buf.writeln('|------|------|--------|----------|-------------|');
-    for (final col in doc.columns) {
-      buf.writeln('| ${col.name} | ${col.type} | ${col.isList} | ${col.required} | ${col.description} |');
-    }
-
-    for (final lt in doc.localTypes) {
-      buf.writeln();
-      buf.writeln('## type: ${lt.name}');
-      buf.writeln();
-      buf.writeln('| name | type | isList | required | description |');
-      buf.writeln('|------|------|--------|----------|-------------|');
-      for (final col in lt.columns) {
-        buf.writeln('| ${col.name} | ${col.type} | ${col.isList} | ${col.required} | ${col.description} |');
-      }
-    }
-
-    for (final le in doc.localEnums) {
-      buf.writeln();
-      buf.writeln('## enum: ${le.name}');
-      for (final v in le.values) {
-        if (v.trim().isNotEmpty) buf.writeln('- $v');
-      }
+    buf.writeln('| 속성명 | 속성 정보 |');
+    buf.writeln('|--------|----------|');
+    for (final attr in doc.attributes) {
+      buf.writeln('| ${attr.name} | ${attr.info} |');
     }
 
     for (final section in doc.unknownSections) {
@@ -223,7 +138,7 @@ class EntityService {
   }
 
   Future<String> createEntity(String projectPath, String entityName) async {
-    final dir = Directory(p.join(projectPath, 'entities'));
+    final dir = Directory(p.join(projectPath, 'data'));
     if (!await dir.exists()) {
       await dir.create(recursive: true);
     }
@@ -244,51 +159,10 @@ class EntityService {
     }
   }
 
-  // ── Custom Types (stored in types/ directory, same format as entities) ──
-
-  Future<List<EntitySummary>> listTypes(String projectPath) async {
-    final dir = Directory(p.join(projectPath, 'types'));
-    if (!await dir.exists()) {
-      await dir.create(recursive: true);
-    }
-
-    final types = <EntitySummary>[];
-    await for (final entry in dir.list()) {
-      if (entry is File && entry.path.endsWith('.md')) {
-        final name = p.basenameWithoutExtension(entry.path);
-        types.add(EntitySummary(name: name, filePath: entry.path));
-      }
-    }
-    types.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
-    return types;
-  }
-
-  Future<String> createType(String projectPath, String typeName) async {
-    final dir = Directory(p.join(projectPath, 'types'));
-    if (!await dir.exists()) {
-      await dir.create(recursive: true);
-    }
-
-    final filePath = p.join(dir.path, '$typeName.md');
-    final file = File(filePath);
-
-    final doc = EntityDocument(name: typeName);
-    await file.writeAsString(serialize(doc));
-
-    return filePath;
-  }
-
-  Future<void> deleteType(String filePath) async {
-    final file = File(filePath);
-    if (await file.exists()) {
-      await file.delete();
-    }
-  }
-
   String? validateEntityName(String name, List<String> existingNames) {
     final trimmed = name.trim();
     if (trimmed.isEmpty) {
-      return '엔티티 이름을 입력해주세요';
+      return '데이터 항목 이름을 입력해주세요';
     }
 
     for (final ch in _illegalChars.split('')) {
@@ -304,7 +178,7 @@ class EntityService {
     final lowerName = trimmed.toLowerCase();
     for (final existing in existingNames) {
       if (existing.toLowerCase() == lowerName) {
-        return '이미 존재하는 엔티티 이름입니다';
+        return '이미 존재하는 이름입니다';
       }
     }
 

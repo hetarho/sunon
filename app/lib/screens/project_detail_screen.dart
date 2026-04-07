@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../providers/workspace_provider.dart';
 import 'product_page.dart';
 import 'entity_list_page.dart';
+import 'policy_list_page.dart';
 
 class ProjectDetailScreen extends StatefulWidget {
   const ProjectDetailScreen({super.key});
@@ -17,7 +18,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
 
   static const List<String> _menuLabels = [
     'Product',
-    'Entities',
+    'Data Items',
     'Policies',
     'User Stories',
     'Elements',
@@ -53,6 +54,8 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
         return ProductPage(projectPath: projectPath);
       case 1:
         return EntityListPage(projectPath: projectPath);
+      case 2:
+        return PolicyListPage(projectPath: projectPath);
       default:
         return Center(
           child: Text(
